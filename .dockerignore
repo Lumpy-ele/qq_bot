@@ -1,0 +1,36 @@
+# 版本控制
+.git
+.gitignore
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 日志（容器内用挂载卷，不打包进镜像）
+logs/
+*.log
+
+# 测试与文档（生产镜像不需要）
+tests/
+AGENTS.md
+README.md
+docs/
+
+# IDE
+.idea/
+.vscode/
+
+# 本地脚本（容器内不执行）
+scripts/
+
+# 临时文件
+*.tmp
+*.bak

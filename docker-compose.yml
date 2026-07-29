@@ -1,0 +1,67 @@
+services:
+  # ---- OneBot 协议端（NapCat）----
+  # 基于 NTQQ 的 OneBot 11 实现
+  # 首次启动需扫码登录：浏览器访问 http://127.0.0.1:6099/webui
+  onebot:
+    image: mlikiowa/napcat-docker:latest
+    container_name: qq_bot_onebot
+    restart: unless-stopped
+    # NapCat 内部运行 NTQQ 桌面进程，需要特权模式
+    privileged: true
+    ports:
+      # NapCat WebUI（首次扫码登录 + 后续配置 OneBot HTTP 服务端）
+      - "6099:6099"
+      # OneBot 11 HTTP 服务端（本地直连验证用；compose 内部 api 通过 http://onebot:3000 访问）
+      - "3000:3000"
+    environment:
+      TZ: Asia/Shanghai
+    volumes:
+      # 仅挂载需要持久化的子目录，避免覆盖镜像自带的 /app/entrypoint.sh
+      # NapCat 配置（OneBot 服务端配置等）
+      - ./data/napcat/config:/app/napcat/config
+      # QQ 登录态持久化（避免每次重启都要重新扫码）
+      # 注意：NapCat 镜像声明了 VOLUME /app/.config/QQ，必须直接挂载该子目录才能覆盖匿名卷
+      - ./data/napcat/dotconfig:/app/.config/QQ
+    networks:
+      - internal
+
+  # ---- FastAPI 网关 ----
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: qq-bot-api:latest
+    container_name: qq_bot_api
+    restart: unless-stopped
+    environment:
+      # 覆盖容器内 .env，使其指向 compose 内网的 onebot
+      ONEBOT_HTTP_URL: http://onebot:3000
+      ONEBOT_TOKEN: ${ONEBOT_TOKEN:-}
+      API_KEY: ${API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_DIR: /app/logs
+      TZ: Asia/Shanghai
+    volumes:
+      # 日志持久化到宿主机（按天滚动文件可见）
+      - ./logs:/app/logs
+    depends_on:
+      - onebot
+    networks:
+      - internal
+
+  # ---- Cloudflare Tunnel（quick tunnel 模式）----
+  # 将 http://api:8000 暴露为 https://*.trycloudflare.com
+  # 随机域名在容器重建后会变化，启动脚本会打印最新 URL
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: qq_bot_tunnel
+    restart: unless-stopped
+    command: tunnel --url http://api:8000
+    depends_on:
+      - api
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
